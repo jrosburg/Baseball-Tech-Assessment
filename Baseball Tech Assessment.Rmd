@@ -1,0 +1,112 @@
+---
+title: "Baseball Technical Assignment"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(tidyr) 
+library(data.table)
+library(dplyr)
+library(ggplot2)
+library(knitr)
+library(kableExtra)
+
+```
+
+
+```{r Question 2 data, include= FALSE, echo=FALSE, warning=FALSE}
+vertical_bat_angle <- read.csv("C://Users/jaker/OneDrive/Desktop/Professional Development/Technical Assessments/Tech Assessment/vertical_bat_angle_2.csv")
+performance_metrics <- read.csv("C://Users/jaker/OneDrive/Desktop/Professional Development/Technical Assessments/Tech Assessment/performance_metrics_2.csv")
+```
+
+### Purpose
+Analyze and organize vertical bat angle
+
+```{r Q2 part 1, echo=FALSE, warning=FALSE}
+# Calculate the mean vertical bat angle for each batter-batter side pair
+agg_vertical_bat_angle <- aggregate(VERTICAL_BAT_ANGLE ~ BATTER_ID + BATTER_SIDE, data = vertical_bat_angle, FUN = mean)
+
+# Sort the dataset based on the aggregated vertical bat angle in ascending order
+sorted_agg_vertical_bat_angle <- agg_vertical_bat_angle[order(agg_vertical_bat_angle$VERTICAL_BAT_ANGLE), ]
+
+## Sorting this way means players with the flatter swings on average will be at the end of the list while players with steeper swings will be at the top
+
+
+# Display the leaderboard
+leaderboard <- sorted_agg_vertical_bat_angle[c('BATTER_ID', 'BATTER_SIDE', 'VERTICAL_BAT_ANGLE')]
+# print(leaderboard)
+write.csv(leaderboard, "C://Users/jaker/OneDrive/Desktop/Professional Development/Technical Assessments/Tech Assessment/leaderboard.csv")
+
+# Set thresholds related to Blast Motion data
+thresholds <- c(-24, -35)
+
+# Create a graph to display distribution of vertical bat angles in a histogram
+distribution_plot <- ggplot(leaderboard, aes(x = VERTICAL_BAT_ANGLE)) +
+  geom_histogram(fill = "blue", color = "black", alpha = 0.5) +
+  geom_vline(xintercept = thresholds, linetype = "dashed", color = "red", size = 1.5) +
+  labs(title = "Vertical Bat Angle Distribution Graph",
+       x = "Values",
+       y = "Frequency") +
+  theme_minimal() +
+    annotate("text", x = min(leaderboard$VERTICAL_BAT_ANGLE), y = Inf, hjust = 0, vjust = 1, 
+           label = "Note: The thresholds set at
+           -24 and -35 degrees 
+           are based on data 
+           collected by 
+           Blast Motion 
+           from Minor 
+           and Major League 
+           averages.") 
+distribution_plot
+
+```
+
+```{r Q2 part 2, echo=FALSE, warning=FALSE}
+# Merge leaderboard data with performance metrics
+merged_data <- merge(leaderboard, performance_metrics, by.x = c("BATTER_ID", "BATTER_SIDE"), by.y = c("BATTER_ID", "BATTER_SIDE"), all = TRUE)
+
+# Select columns wanted for correlation and omit NA values
+correct_columns <- merged_data %>%
+  select(VERTICAL_BAT_ANGLE, PITCHES_SEEN, PA, CONTACT_AA, SWING_AA, CHASE_AA, PEAK_EV, HARD_HIT_LAUNCH, HARD_HIT_RATE, SD_LAUNCH) %>%
+  na.omit
+
+# Run a correlation test and display the results
+# correlation_test <- cor(correct_columns)
+# correlation_test
+
+```
+
+
+```{r Question 3 data, echo=FALSE, warning=FALSE}
+force_plate_data <- read.csv("C://Users/jaker/OneDrive/Desktop/Professional Development/Technical Assessments/Tech Assessment/force_plate_data_2.csv")
+
+### Need to group by Pitcher 
+# Step 2: Create a Subset for Relevant Columns
+relevant_columns <- c("PITCH_ID", "PITCHER_ID", "PITCHER_THROWS", "WEIGHT", "VELOCITY", "FRAME", "BALL_RELEASE", "FORCE_X", "FORCE_Y", "FORCE_Z", "TORQUE_Z")
+
+force_plate_data_subset <- force_plate_data %>% 
+  select(relevant_columns)
+
+# Step 3: Calculate Peak Forces and Torque
+force_plate_data_peaks <- force_plate_data_subset %>% 
+  group_by(PITCH_ID, PITCHER_ID) %>% 
+  summarize(
+    Peak_FORCE_X = max(FORCE_X),
+    Peak_FORCE_Y = max(FORCE_Y),
+    Peak_FORCE_Z = max(FORCE_Z),
+    Peak_TORQUE_Z = max(TORQUE_Z),
+    VELOCITY = first(VELOCITY),  # Assuming velocity is constant for each pitch
+    WEIGHT = first(WEIGHT)       # Assuming weight is constant for each pitch
+  )
+
+#Step 4: Join the Peak Values with Velocity and Weight
+peaks_merged <- force_plate_data_peaks %>%
+  left_join(force_plate_data_subset %>% filter(FRAME == BALL_RELEASE), by = c("PITCH_ID", "PITCHER_ID")) %>%
+  select(PITCH_ID, PITCHER_ID, VELOCITY.x = "VELOCITY", WEIGHT.x = "WEIGTH", Peak_FORCE_X, Peak_FORCE_Y, Peak_FORCE_Z, Peak_TORQUE_Z)
+
+# Step 5: Calculate Correlation
+peak_correlations <- cor(force_plate_data_peaks[, c("VELOCITY", "WEIGHT", "Peak_FORCE_X", "Peak_FORCE_Y", "Peak_FORCE_Z", "Peak_TORQUE_Z")])
+
+
+
+```
